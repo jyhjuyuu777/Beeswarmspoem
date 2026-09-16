@@ -1299,3 +1299,319 @@ task.spawn(function()
         end
     end
 end)
+Tab:AddRightGroupbox("Select")
+--// RIGHT BOX - SELECT FARM + AUTO FARM
+--// Tween + Skill 101 + Skill 1
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local SkillRemote = ReplicatedStorage
+    :WaitForChild("Remotes")
+    :WaitForChild("SkillRemote")
+
+local WorldMobs = workspace:WaitForChild("World Mobs")
+
+local AutoFarm = false
+local SelectedMob = nil
+local TweenSpeed = 200
+
+local FarmConnection = nil
+local HoldConnection = nil
+
+
+--// Lấy Character
+local function GetCharacter()
+    local Characters = workspace:FindFirstChild("Characters")
+    if not Characters then
+        return nil
+    end
+
+    return Characters:FindFirstChild(LocalPlayer.Name)
+end
+
+
+--// Lấy Root
+local function GetRoot()
+    local Character = GetCharacter()
+    if not Character then
+        return nil
+    end
+
+    return Character:FindFirstChild("HumanoidRootPart")
+end
+
+
+--// Lấy danh sách Mob không trùng tên
+local function GetMobList()
+    local List = {}
+    local Seen = {}
+
+    for _, Object in ipairs(WorldMobs:GetDescendants()) do
+        if Object:IsA("Model") then
+            local Humanoid = Object:FindFirstChildOfClass("Humanoid")
+            local Root = Object:FindFirstChild("HumanoidRootPart")
+
+            if Humanoid and Root and Humanoid.Health > 0 then
+                if not Seen[Object.Name] then
+                    Seen[Object.Name] = true
+                    table.insert(List, Object.Name)
+                end
+            end
+        end
+    end
+
+    table.sort(List)
+
+    return List
+end
+
+
+--// Tìm mob theo tên
+local function FindMob(MobName)
+    if not MobName then
+        return nil
+    end
+
+    for _, Object in ipairs(WorldMobs:GetDescendants()) do
+        if Object:IsA("Model") and Object.Name == MobName then
+            local Humanoid = Object:FindFirstChildOfClass("Humanoid")
+            local Root = Object:FindFirstChild("HumanoidRootPart")
+
+            if Humanoid and Root and Humanoid.Health > 0 then
+                return Object
+            end
+        end
+    end
+
+    return nil
+end
+
+
+--// Fire Skill
+local function FireSkill(SkillId)
+    local Root = GetRoot()
+    if not Root then
+        return
+    end
+
+    local Camera = workspace.CurrentCamera
+
+    local args = {
+        [1] = {
+            ["Camera"] = Camera and Camera.CFrame or Root.CFrame,
+            ["SkillId"] = tostring(SkillId),
+            ["Began"] = true,
+            ["CFrame"] = Root.CFrame,
+            ["Typ\208\181"] = 1,
+            ["Aim"] = Root.Position
+        }
+    }
+
+    SkillRemote:FireServer(unpack(args))
+end
+
+
+--// Tween tới Mob
+local function TweenToMob(Mob)
+    local Root = GetRoot()
+    local MobRoot = Mob and Mob:FindFirstChild("HumanoidRootPart")
+
+    if not Root or not MobRoot then
+        return
+    end
+
+    -- Đứng phía trên mob một chút
+    local TargetCFrame =
+        MobRoot.CFrame * CFrame.new(0, 6, 0)
+
+    local Distance =
+        (Root.Position - TargetCFrame.Position).Magnitude
+
+    if Distance < 2 then
+        return
+    end
+
+    local Duration = Distance / math.max(TweenSpeed, 1)
+
+    local Tween = TweenService:Create(
+        Root,
+        TweenInfo.new(
+            Duration,
+            Enum.EasingStyle.Linear,
+            Enum.EasingDirection.InOut
+        ),
+        {
+            CFrame = TargetCFrame
+        }
+    )
+
+    Tween:Play()
+
+    -- Chặn vận tốc vật lý gây rơi/giật
+    if HoldConnection then
+        HoldConnection:Disconnect()
+        HoldConnection = nil
+    end
+
+    HoldConnection = RunService.Heartbeat:Connect(function()
+        if not AutoFarm then
+            return
+        end
+
+        if not Root or not Root.Parent then
+            return
+        end
+
+        Root.AssemblyLinearVelocity = Vector3.zero
+        Root.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    Tween.Completed:Wait()
+
+    if HoldConnection then
+        HoldConnection:Disconnect()
+        HoldConnection = nil
+    end
+end
+
+
+--// DROPDOWN
+RightBox:AddDropdown("Select", {
+    Text = "Select Farm",
+    Values = GetMobList(),
+    Default = nil,
+
+    Callback = function(Value)
+        SelectedMob = Value
+    end
+})
+
+
+--// NÚT REFRESH MOB
+RightBox:AddButton("Select", {
+    Text = "Refresh Mob List",
+
+    Func = function()
+        local NewList = GetMobList()
+
+        -- Tùy phiên bản Obsidian:
+        -- nếu dropdown hỗ trợ SetValues thì cập nhật trực tiếp
+        if RightBox.Options
+            and RightBox.Options.SelectFarm
+            and RightBox.Options.SelectFarm.SetValues then
+
+            RightBox.Options.SelectFarm:SetValues(NewList)
+        end
+    end
+})
+
+
+--// THANH TỐC ĐỘ
+RightBox:AddSlider("Select", {
+    Text = "Tween Speed",
+    Default = 200,
+    Min = 50,
+    Max = 500,
+    Rounding = 0,
+
+    Callback = function(Value)
+        TweenSpeed = Value
+    end
+})
+
+
+--// AUTO FARM
+RightBox:AddToggle("Select", {
+    Text = "Auto Farm Select",
+    Default = false,
+
+    Callback = function(Value)
+        AutoFarm = Value
+
+        if not AutoFarm then
+            if FarmConnection then
+                task.cancel(FarmConnection)
+                FarmConnection = nil
+            end
+
+            if HoldConnection then
+                HoldConnection:Disconnect()
+                HoldConnection = nil
+            end
+
+            return
+        end
+
+        if not SelectedMob then
+            AutoFarm = false
+            return
+        end
+
+        FarmConnection = task.spawn(function()
+
+            while AutoFarm do
+
+                local Mob = FindMob(SelectedMob)
+
+                if not Mob then
+                    task.wait(0.2)
+                    continue
+                end
+
+                local MobRoot = Mob:FindFirstChild("HumanoidRootPart")
+                local Humanoid = Mob:FindFirstChildOfClass("Humanoid")
+
+                if not MobRoot or not Humanoid or Humanoid.Health <= 0 then
+                    task.wait(0.1)
+                    continue
+                end
+
+
+                --// TWEEN
+                TweenToMob(Mob)
+
+                if not AutoFarm then
+                    break
+                end
+
+
+                --// LOCK ON + SKILL 101 + SKILL 1
+                while AutoFarm
+                    and Mob
+                    and Mob.Parent
+                    and Humanoid
+                    and Humanoid.Health > 0 do
+
+                    local Root = GetRoot()
+
+                    if not Root then
+                        break
+                    end
+
+                    -- Giữ nhân vật không bị rơi
+                    Root.AssemblyLinearVelocity = Vector3.zero
+                    Root.AssemblyAngularVelocity = Vector3.zero
+
+                    -- Giữ vị trí trên Mob
+                    Root.CFrame =
+                        MobRoot.CFrame * CFrame.new(0, 6, 0)
+
+                    -- Skill 101
+                    FireSkill(101)
+
+                    -- Skill 1
+                    FireSkill(1)
+
+                    task.wait(0.05)
+                end
+
+                task.wait(0.05)
+            end
+        end)
+    end
+})
