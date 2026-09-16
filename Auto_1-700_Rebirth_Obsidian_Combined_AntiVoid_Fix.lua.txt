@@ -972,7 +972,7 @@ Box:AddDropdown("ToolbarNumber", {
     Values = {"1", "2", "3", "4", "5", "6"},
     Default = "1",
     Multi = false,
-    Text = "Select Number",
+    Text = "Select equip",
 
     Callback = function(Value)
         SelectedNumber = tonumber(Value)
@@ -1299,7 +1299,7 @@ task.spawn(function()
         end
     end
 end)
-Tab:AddRightGroupbox("Select")
+local RightBox = Tab:AddRightGroupbox("Select")
 --// RIGHT BOX - SELECT FARM + AUTO FARM
 --// Tween + Skill 101 + Skill 1
 
