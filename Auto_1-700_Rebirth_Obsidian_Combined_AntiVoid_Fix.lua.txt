@@ -1481,7 +1481,7 @@ end
 
 
 --// DROPDOWN
-RightBox:AddDropdown("Select", {
+Box:AddDropdown("Select", {
     Text = "Select Farm",
     Values = GetMobList(),
     Default = nil,
@@ -1512,7 +1512,7 @@ RightBox:AddButton("Select", {
 
 
 --// THANH TỐC ĐỘ
-RightBox:AddSlider("Select", {
+Box:AddSlider("Select", {
     Text = "Tween Speed",
     Default = 200,
     Min = 50,
@@ -1526,7 +1526,7 @@ RightBox:AddSlider("Select", {
 
 
 --// AUTO FARM
-RightBox:AddToggle("Select", {
+Box:AddToggle("Select", {
     Text = "Auto Farm Select",
     Default = false,
 
